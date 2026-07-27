@@ -26,15 +26,27 @@ const sentimentColor: Record<string, string> = {
   Angry: "bg-red-100 text-red-800",
 };
 
-async function getCalls(): Promise<CallView[]> {
-  const { data } = await supabaseAdmin()
+async function getCalls(): Promise<{ calls: CallView[]; error: string | null }> {
+  const { data, error } = await supabaseAdmin()
     .from("calls")
     .select(
       "id,type,status,summary,completion_confidence,created_at,customers(name,business_name,phone),insights(sentiment,activation_status,follow_up_required,goal)"
     )
     .order("created_at", { ascending: false })
     .limit(50);
-  return (data as unknown as CallView[]) ?? [];
+  return { calls: (data as unknown as CallView[]) ?? [], error: error?.message ?? null };
+}
+
+function ErrorBanner({ message }: { message: string }) {
+  return (
+    <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+      <strong>Database error:</strong> {message}
+      <div className="mt-1 text-red-600">
+        Check that <code>SUPABASE_SERVICE_ROLE_KEY</code> is the key for this exact
+        project (<code>xovsiklkiqxmpmvioscc</code>).
+      </div>
+    </div>
+  );
 }
 
 function SetupNotice() {
@@ -54,7 +66,7 @@ function SetupNotice() {
 
 export default async function Dashboard() {
   if (!supabaseConfigured()) return <SetupNotice />;
-  const calls = await getCalls();
+  const { calls, error } = await getCalls();
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
@@ -64,6 +76,8 @@ export default async function Dashboard() {
           Every onboarding call, its sentiment, and the next action.
         </p>
       </header>
+
+      {error && <ErrorBanner message={error} />}
 
       {calls.length === 0 ? (
         <p className="text-gray-500">

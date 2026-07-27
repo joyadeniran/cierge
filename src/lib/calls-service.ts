@@ -65,7 +65,7 @@ export async function startOnboardingCall(customer: CustomerRow) {
     .single();
   if (callErr) throw new Error(`create call: ${callErr.message}`);
 
-  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  const appUrl = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 
   const created = await calle().calls.create(
     {
