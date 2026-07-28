@@ -6,6 +6,26 @@ All notable changes to Cierge are documented here.
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-07-28
+
+### Added — Authentication (Supabase Auth)
+- **`@supabase/ssr`** cookie-based auth: browser client (`src/lib/supabase/client.ts`) + server client (`src/lib/supabase/server.ts`)
+- **`middleware.ts`** — refreshes the session on every request and gates the app: unauthenticated users are redirected to `/login` (webhooks + `/api/health` stay public so CALL-E/Supplya can reach them). Fails open if the public env vars are missing so a premature deploy can't take the site down.
+- **`/login`** — branded sign-in / sign-up page (email + password), redirect-aware
+- **`/auth/callback`** — exchanges email-confirmation / OAuth `code` for a session
+- **`/auth/signout`** — POST route that clears the session
+- **`/account`** — profile page: email, member-since, last sign-in, user ID; **change-password** form; sign-out button
+- **Sidebar** now shows the real signed-in user, links to `/account`, and has a sign-out button
+- **Dashboard layout** verifies the user server-side (defense in depth) and passes the email to the sidebar
+- Seeded a confirmed **admin@cierge.app** account via the service-role admin API (bypasses email-confirmation friction for the demo)
+- `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` added to `.env.local` + `.env.example`
+
+### Security
+- The money-spending `/api/calls/onboarding` and `/api/follow-ups/[id]` endpoints are now behind auth (previously public — anyone could burn CALL-E credits)
+
+### Verified
+- `next build` clean — 16 routes + middleware
+
 ## [0.5.0] — 2026-07-28
 
 ### Added — Full dashboard build-out

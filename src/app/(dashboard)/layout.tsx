@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { supabaseConfigured } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 
 function SetupNotice() {
   return (
@@ -20,12 +22,18 @@ function SetupNotice() {
   );
 }
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   if (!supabaseConfigured()) return <SetupNotice />;
+
+  // Defense in depth: middleware already gates, but never render the dashboard
+  // shell without a verified user.
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
-      <Sidebar />
+      <Sidebar userEmail={user.email} />
       <main style={{ marginLeft: 196, flex: 1, overflow: "auto", background: "#F7F8FA" }}>
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "28px 32px" }}>{children}</div>
       </main>

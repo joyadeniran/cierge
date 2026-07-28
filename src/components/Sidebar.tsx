@@ -33,8 +33,10 @@ const NAV: { label: string; href: string; icon: ReactNode }[] = [
   )},
 ];
 
-export function Sidebar() {
+export function Sidebar({ userEmail }: { userEmail?: string | null }) {
   const pathname = usePathname();
+  const initial = (userEmail ?? "S").charAt(0).toUpperCase();
+  const accountActive = pathname.startsWith("/account");
 
   return (
     <aside
@@ -70,14 +72,34 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 14 }}>
-        <div style={{ width: 28, height: 28, borderRadius: 9999, background: "#FF5A1F", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, color: "#FFFFFF", flexShrink: 0 }}>
-          S
-        </div>
-        <div>
-          <div style={{ fontSize: 12, color: "#FFFFFF", fontWeight: 500 }}>Supplya</div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>Admin</div>
-        </div>
+      <div style={{ marginTop: "auto", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+        <Link
+          href="/account"
+          style={{
+            display: "flex", alignItems: "center", gap: 10, textDecoration: "none",
+            padding: "6px 8px", borderRadius: 7,
+            background: accountActive ? "rgba(255,90,31,0.14)" : "transparent",
+          }}
+        >
+          <div style={{ width: 28, height: 28, borderRadius: 9999, background: "#FF5A1F", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, color: "#FFFFFF", flexShrink: 0 }}>
+            {initial}
+          </div>
+          <div style={{ overflow: "hidden" }}>
+            <div style={{ fontSize: 12, color: accountActive ? "#FF5A1F" : "#FFFFFF", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {userEmail ?? "Account"}
+            </div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>View profile</div>
+          </div>
+        </Link>
+        <form action="/auth/signout" method="post">
+          <button
+            type="submit"
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 11px", borderRadius: 7, background: "transparent", border: "none", cursor: "pointer", fontSize: 12, color: "rgba(255,255,255,0.62)", fontFamily: "var(--font-inter), Inter, sans-serif" }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+            Sign out
+          </button>
+        </form>
       </div>
     </aside>
   );
