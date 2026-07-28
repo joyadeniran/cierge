@@ -6,6 +6,28 @@ All notable changes to Cierge are documented here.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-07-28
+
+### Added — Full dashboard build-out
+- **Shared dashboard layout** (`src/app/(dashboard)/layout.tsx`) — route group with sidebar shell; setup notice when Supabase env is missing
+- **Routed sidebar** (`Sidebar.tsx`) — now uses Next `Link` + `usePathname` for real navigation and active-state highlighting
+- **Conversations page** (`/conversations`) — full call list (customer, type, status, sentiment, time, summary)
+- **Call detail page** (`/conversations/[id]`) — chat-style transcript (bot vs customer bubbles with timestamps), summary panel, extracted-insight panel (sentiment, activation, business type, goal, pain points, follow-up, completion confidence); handles missing transcript/insight gracefully; `notFound()` on bad id
+- **Customers page** (`/customers`) — customer list with status pill, phone, call count, latest sentiment, joined date
+- **Tasks page** (`/tasks`) — follow-up queue with channel/reason/status; interactive **Mark done / reopen** button
+- **Analytics page** (`/analytics`) — sentiment distribution, activation funnel, top pain points, calls-over-time — all rendered with CSS bars (no external chart lib); stat tiles for total/completion/failed/open follow-ups
+- **`PATCH /api/follow-ups/[id]`** — mark a follow-up sent/pending/failed (validates status enum, 404 on missing)
+- **Shared query layer** (`src/lib/queries.ts`) — typed `getCalls`, `getCall`, `getCustomers`, `getFollowUps`, `getAnalytics`; every function returns `{ data, error }` so pages render an error banner instead of throwing
+- **Shared UI primitives** (`src/components/ui.tsx`) — `PageHeader`, `Panel`, `ErrorBanner`, `EmptyState`, `relativeTime`, `Dash`
+- **`FollowUpActions.tsx`** — client Mark-done button with optimistic refresh + error surface
+
+### Changed
+- Overview page moved into `(dashboard)` route group; slimmed to use the shared layout/shell and shared primitives; rows now link to the conversation detail
+- Every list page handles empty state with a clear CTA and surfaces DB errors via `ErrorBanner`
+
+### Verified
+- `next build` clean — 12 routes compile (6 pages + 6 API routes)
+
 ## [0.4.0] — 2026-07-28
 
 ### Added

@@ -15,6 +15,19 @@ Cierge is a standalone AI voice agent that autonomously welcomes, onboards, and 
 
 ---
 
+## Pages
+
+| Route | Purpose |
+|---|---|
+| `/` | Overview — Voice of Customer: stat tiles + recent calls, "Call a customer" action |
+| `/conversations` | All calls placed by Cierge |
+| `/conversations/[id]` | Call detail — chat-style transcript + extracted insight |
+| `/customers` | Customer directory — status, calls, latest sentiment |
+| `/tasks` | Follow-up queue — mark done / reopen |
+| `/analytics` | Sentiment distribution, activation funnel, top pain points, calls over time |
+
+All pages share a fixed dark sidebar (`(dashboard)/layout.tsx`) and render an error banner (never a silent empty) when the DB is unreachable.
+
 ## Architecture
 
 ```
@@ -150,6 +163,15 @@ CALL-E terminal event receiver (`call.completed | call.failed | call.result_vali
 
 **Success:** `{ ok: true }`  
 **Errors:** 400 (bad signature or parse), 500 (ingest failure)
+
+---
+
+### `PATCH /api/follow-ups/:id`
+Update a follow-up's status from the Tasks page.
+
+**Body:** `{ "status": "sent" | "pending" | "failed" }`  
+**Success:** `{ ok: true, id, status }` (sets `sent_at` when marked sent)  
+**Errors:** 400 (bad status), 404 (not found), 500
 
 ---
 
