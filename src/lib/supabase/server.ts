@@ -1,6 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+/** True when the public Supabase keys (needed for auth) are configured. */
+export function authConfigured(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+}
+
 /**
  * Server-side Supabase client bound to the request's cookies. Use in Server
  * Components, Route Handlers, and Server Actions to read the logged-in user.

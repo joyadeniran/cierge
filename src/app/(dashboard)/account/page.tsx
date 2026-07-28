@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, authConfigured } from "@/lib/supabase/server";
 import { PageHeader, Panel } from "@/components/ui";
 import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 
@@ -15,6 +15,10 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 export default async function AccountPage() {
+  // The dashboard layout renders a setup notice in this case; avoid touching
+  // the auth client (which would throw) before that notice takes over.
+  if (!authConfigured()) return null;
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
