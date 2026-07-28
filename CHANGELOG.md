@@ -1,0 +1,90 @@
+# Changelog
+
+All notable changes to Cierge are documented here.
+
+---
+
+## [Unreleased]
+
+## [0.4.0] — 2026-07-28
+
+### Added
+- **Design system implementation** (`globals.css`, `layout.tsx`, all components)
+  - CSS design tokens from Cierge Design System v1.0 (`--ink`, `--orange`, `--mist`, `--line`, `--slate`, `--success`, etc.)
+  - Google Fonts: Inter Tight (headings), Inter (body), JetBrains Mono (data/labels)
+  - `Logo` component — `<cierge>` wordmark with orange brackets, Inter Tight Bold
+  - `Badge` component — `SentimentBadge`, `StatusBadge`, `ActivationBadge`, `FollowUpBadge` — all pill-shaped, colour-coded per design system
+  - `Sidebar` component — fixed dark (Ink #111111) sidebar, 196px, logo + nav + avatar
+  - `StatCard` component — white card, Inter Tight headline, Mist separator
+  - `DashboardActions` component (client) — "Call a customer" orange button with hover state
+  - `CallNowModal` component (client) — modal with name/business/phone fields, loading spinner, success state, error banner; auto-closes and refreshes page on success; closes on Escape key
+
+- **Full dashboard redesign** (`src/app/page.tsx`)
+  - Dark sidebar + Mist main canvas layout matching Applications section of design spec
+  - 4 stat tiles: Calls placed, Completed, Activation rate, Follow-ups needed
+  - Real data from `calls` + `insights` tables (Promise.allSettled — one table failure won't kill the other)
+  - Call table with 6 columns: Customer, Status, Sentiment, Activation, Follow-up, Summary
+  - Row hover state, truncated summary with tooltip, relative timestamps
+  - Empty state with CTA pointing to "Call a customer" button
+  - DB error banner (red, shows project ref to diagnose wrong-key mistakes)
+
+- **`SPEC.md`** — full product specification: architecture, DB schema, API contracts, call flow, env vars, design tokens, CALL-E constraints, demo flow
+- **`CHANGELOG.md`** — this file
+
+### Changed
+- `layout.tsx` — replaced Geist fonts with Inter/Inter Tight/JetBrains Mono; updated metadata title/description
+- `globals.css` — replaced default Next.js styles with Cierge design token definitions
+
+---
+
+## [0.3.0] — 2026-07-28
+
+### Added
+- `/api/health` endpoint — live DB reachability check, env var presence audit, project-ref match verification (no secrets exposed)
+
+### Fixed
+- `src/app/page.tsx` — DB errors now show a red banner ("Database error: ...") instead of silently rendering "No calls yet"
+- `src/lib/calls-service.ts` — strip trailing slash from `APP_URL` before building webhook URL (prevented double-slash in CALL-E callback)
+
+---
+
+## [0.2.0] — 2026-07-27
+
+### Added
+- Supabase project `cierge` provisioned (id: `xovsiklkiqxmpmvioscc`, region: eu-west-1, free tier)
+- Supabase schema applied via MCP migration (`init_cierge_schema`): tables `customers`, `calls`, `insights`, `follow_ups` with indexes
+- `.env.local` written with `SUPABASE_URL`, `APP_URL`, `SUPPLYA_WEBHOOK_SECRET`, placeholder keys
+- `.env.example` unexcluded from `.gitignore` (now tracked); `.env.local` remains ignored
+
+### Fixed
+- `.gitignore` — `!.env.example` exception added so the template is committed to the repo
+
+### Docs
+- `docs/telephony-demo.md` — step-by-step Twilio US-number forwarding guide for the hackathon demo (CALL-E +234 limitation workaround)
+- `docs/deploy-vercel.md` — Vercel deploy guide (GitHub import path + CLI path + all env vars)
+
+---
+
+## [0.1.0] — 2026-07-27
+
+### Added — Initial scaffold
+
+- **Next.js 16 app** (App Router, TypeScript, Tailwind, Turbopack) bootstrapped via `create-next-app`
+- **Dependencies:** `@call-e/calle@0.2.2`, `@supabase/supabase-js`, `@google/genai`, `zod`
+- **`src/lib/calle.ts`** — lazy `CalleClient` singleton, `calleConfigured()` guard
+- **`src/lib/supabase.ts`** — service-role Supabase client singleton, `supabaseConfigured()` guard
+- **`src/lib/flows/onboarding.ts`** — onboarding call task string, `onboardingResultSchema` (JSON Schema for CALL-E structured extraction), `OnboardingInsight` type
+- **`src/lib/calls-service.ts`** — `upsertCustomer()`, `startOnboardingCall()` (creates DB row + places CALL-E call with `resultSchema` + `webhookUrl` + idempotency key)
+- **`src/lib/ingest.ts`** — `ingestCallSnapshot()`: updates call row, stores insight, reflects activation into customer status; idempotent via Supabase upsert
+- **`src/lib/followups.ts`** — `maybeFollowUp()`: records `follow_ups` row for frustrated/angry/follow-up-flagged calls (send dispatch is a TODO)
+- **`src/app/api/webhooks/supplya/route.ts`** — new-signup trigger; validates `x-cierge-secret`, E.164 phone, calls `upsertCustomer` + `startOnboardingCall`
+- **`src/app/api/webhooks/calle/route.ts`** — CALL-E terminal event receiver; HMAC verification via `calle().webhooks.unwrap()`, falls back to raw parse when `CALLE_WEBHOOK_SECRET` unset; calls `ingestCallSnapshot`
+- **`src/app/api/calls/onboarding/route.ts`** — manual trigger; accepts `{customerId}` or `{name, business_name, phone}`
+- **`src/app/page.tsx`** — initial Voice-of-Customer dashboard (table of calls with sentiment/activation/follow-up columns)
+- **`supabase/schema.sql`** — DDL for all 4 tables (source of truth; applied via Supabase MCP)
+- **`README.md`** — product overview, stack, setup steps, endpoint table, test call snippet
+
+### Architecture decision
+- **Standalone product, Supplya as customer #0** (not embedded in supplya-backend)
+- **Single Next.js app** (no separate Express API server)
+- **CALL-E for hackathon (supported-region demo)** + separate provider path for Nigeria production

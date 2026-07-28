@@ -1,15 +1,26 @@
 import { supabaseAdmin, supabaseConfigured } from "@/lib/supabase";
+import { Sidebar } from "@/components/Sidebar";
+import { StatCard } from "@/components/StatCard";
+import { SentimentBadge, ActivationBadge, FollowUpBadge, StatusBadge } from "@/components/Badge";
+import { DashboardActions } from "@/components/DashboardActions";
 
 export const dynamic = "force-dynamic";
 
-type CallView = {
+/* ── Types ─────────────────────────────────────────────────────────────── */
+type CallRow = {
   id: string;
   type: string;
   status: string;
   summary: string | null;
   completion_confidence: number | null;
   created_at: string;
-  customers: { name: string | null; business_name: string | null; phone: string } | null;
+  completed_at: string | null;
+  customers: {
+    id: string;
+    name: string | null;
+    business_name: string | null;
+    phone: string;
+  } | null;
   insights: {
     sentiment: string | null;
     activation_status: string | null;
@@ -18,136 +29,196 @@ type CallView = {
   }[];
 };
 
-const sentimentColor: Record<string, string> = {
-  Positive: "bg-green-100 text-green-800",
-  Neutral: "bg-gray-100 text-gray-700",
-  Confused: "bg-yellow-100 text-yellow-800",
-  Frustrated: "bg-orange-100 text-orange-800",
-  Angry: "bg-red-100 text-red-800",
+type Stats = {
+  totalCalls: number;
+  completed: number;
+  activated: number;
+  followUps: number;
 };
 
-async function getCalls(): Promise<{ calls: CallView[]; error: string | null }> {
-  const { data, error } = await supabaseAdmin()
-    .from("calls")
-    .select(
-      "id,type,status,summary,completion_confidence,created_at,customers(name,business_name,phone),insights(sentiment,activation_status,follow_up_required,goal)"
-    )
-    .order("created_at", { ascending: false })
-    .limit(50);
-  return { calls: (data as unknown as CallView[]) ?? [], error: error?.message ?? null };
+/* ── Data fetching ──────────────────────────────────────────────────────── */
+async function getData(): Promise<{ calls: CallRow[]; stats: Stats; error: string | null }> {
+  const sb = supabaseAdmin();
+
+  const [callsRes, statsRes] = await Promise.allSettled([
+    sb
+      .from("calls")
+      .select(
+        "id,type,status,summary,completion_confidence,created_at,completed_at," +
+        "customers(id,name,business_name,phone)," +
+        "insights(sentiment,activation_status,follow_up_required,goal)"
+      )
+      .order("created_at", { ascending: false })
+      .limit(100),
+    sb
+      .from("insights")
+      .select("activation_status,follow_up_required", { count: "exact" }),
+  ]);
+
+  if (callsRes.status === "rejected" || callsRes.value.error) {
+    const msg = callsRes.status === "rejected"
+      ? (callsRes.reason as Error).message
+      : callsRes.value.error!.message;
+    return { calls: [], stats: { totalCalls: 0, completed: 0, activated: 0, followUps: 0 }, error: msg };
+  }
+
+  const calls = (callsRes.value.data ?? []) as unknown as CallRow[];
+
+  const insights = statsRes.status === "fulfilled" && !statsRes.value.error
+    ? (statsRes.value.data ?? []) as { activation_status: string | null; follow_up_required: boolean | null }[]
+    : [];
+
+  const stats: Stats = {
+    totalCalls: calls.length,
+    completed: calls.filter(c => c.status === "completed").length,
+    activated: insights.filter(i => i.activation_status === "Activated").length,
+    followUps: insights.filter(i => i.follow_up_required).length,
+  };
+
+  return { calls, stats, error: null };
 }
 
-function ErrorBanner({ message }: { message: string }) {
+/* ── Setup notice ───────────────────────────────────────────────────────── */
+function SetupNotice() {
   return (
-    <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-      <strong>Database error:</strong> {message}
-      <div className="mt-1 text-red-600">
-        Check that <code>SUPABASE_SERVICE_ROLE_KEY</code> is the key for this exact
-        project (<code>xovsiklkiqxmpmvioscc</code>).
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#F7F8FA" }}>
+      <div style={{ maxWidth: 460, textAlign: "center", padding: 40, border: "1px dashed #D8DCE4", borderRadius: 14, background: "#FFFFFF" }}>
+        <div style={{ fontFamily: "var(--font-inter-tight), 'Inter Tight', sans-serif", fontWeight: 700, fontSize: 28, letterSpacing: "-0.04em" }}>
+          <span style={{ color: "#FF5A1F" }}>&lt;</span>cierge<span style={{ color: "#FF5A1F" }}>&gt;</span>
+        </div>
+        <p style={{ fontSize: 15, color: "#667085", margin: "8px 0 24px" }}>Your AI Customer Success Agent</p>
+        <div style={{ textAlign: "left", background: "#F7F8FA", borderRadius: 10, padding: "16px 20px", fontSize: 13, color: "#444B57", lineHeight: 1.7 }}>
+          Set <code style={{ background: "#E7E9EE", padding: "1px 6px", borderRadius: 4 }}>SUPABASE_URL</code> and{" "}
+          <code style={{ background: "#E7E9EE", padding: "1px 6px", borderRadius: 4 }}>SUPABASE_SERVICE_ROLE_KEY</code> in{" "}
+          <code style={{ background: "#E7E9EE", padding: "1px 6px", borderRadius: 4 }}>.env.local</code>, then run{" "}
+          <code style={{ background: "#E7E9EE", padding: "1px 6px", borderRadius: 4 }}>supabase/schema.sql</code>.
+        </div>
       </div>
     </div>
   );
 }
 
-function SetupNotice() {
-  return (
-    <div className="mx-auto mt-24 max-w-xl rounded-xl border border-dashed p-8 text-center">
-      <h1 className="text-2xl font-semibold">Cierge</h1>
-      <p className="mt-2 text-gray-500">Your AI Customer Success agent.</p>
-      <p className="mt-6 text-sm text-gray-600">
-        Set <code className="rounded bg-gray-100 px-1">SUPABASE_URL</code> and{" "}
-        <code className="rounded bg-gray-100 px-1">SUPABASE_SERVICE_ROLE_KEY</code> in{" "}
-        <code className="rounded bg-gray-100 px-1">.env.local</code>, run{" "}
-        <code className="rounded bg-gray-100 px-1">supabase/schema.sql</code>, then reload.
-      </p>
-    </div>
-  );
+/* ── Relative time ──────────────────────────────────────────────────────── */
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60_000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }
 
+/* ── Main page ──────────────────────────────────────────────────────────── */
 export default async function Dashboard() {
   if (!supabaseConfigured()) return <SetupNotice />;
-  const { calls, error } = await getCalls();
+
+  const { calls, stats, error } = await getData();
+  const activationRate = stats.completed > 0
+    ? Math.round((stats.activated / stats.completed) * 100)
+    : 0;
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <header className="mb-8">
-        <h1 className="text-2xl font-semibold">Cierge — Voice of Customer</h1>
-        <p className="text-sm text-gray-500">
-          Every onboarding call, its sentiment, and the next action.
-        </p>
-      </header>
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+      <Sidebar />
 
-      {error && <ErrorBanner message={error} />}
+      {/* Main content, offset for the 196px sidebar */}
+      <main style={{ marginLeft: 196, flex: 1, overflow: "auto", background: "#F7F8FA" }}>
+        <div style={{ maxWidth: 1120 - 196, margin: "0 auto", padding: "28px 32px" }}>
 
-      {calls.length === 0 ? (
-        <p className="text-gray-500">
-          No calls yet. Trigger one via{" "}
-          <code className="rounded bg-gray-100 px-1">POST /api/calls/onboarding</code>.
-        </p>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-left text-gray-500">
-              <tr>
-                <th className="px-4 py-3 font-medium">Customer</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Sentiment</th>
-                <th className="px-4 py-3 font-medium">Activation</th>
-                <th className="px-4 py-3 font-medium">Follow-up</th>
-                <th className="px-4 py-3 font-medium">Summary</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {calls.map((c) => {
-                const insight = c.insights?.[0];
-                return (
-                  <tr key={c.id} className="align-top">
-                    <td className="px-4 py-3">
-                      <div className="font-medium">
-                        {c.customers?.name ?? "Unknown"}
-                      </div>
-                      <div className="text-gray-400">
-                        {c.customers?.business_name ?? c.customers?.phone}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs">
-                        {c.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {insight?.sentiment ? (
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs ${
-                            sentimentColor[insight.sentiment] ?? "bg-gray-100"
-                          }`}
-                        >
-                          {insight.sentiment}
-                        </span>
-                      ) : (
-                        <span className="text-gray-300">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">{insight?.activation_status ?? "—"}</td>
-                    <td className="px-4 py-3">
-                      {insight?.follow_up_required ? (
-                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800">
-                          Needed
-                        </span>
-                      ) : (
-                        <span className="text-gray-300">—</span>
-                      )}
-                    </td>
-                    <td className="max-w-xs px-4 py-3 text-gray-600">
-                      {c.summary ?? insight?.goal ?? "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          {/* ── Header ── */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+            <div>
+              <h1 style={{ margin: 0, fontFamily: "var(--font-inter-tight), 'Inter Tight', sans-serif", fontWeight: 600, fontSize: 22, letterSpacing: "-0.02em" }}>
+                Voice of Customer
+              </h1>
+              <p style={{ margin: "3px 0 0", fontSize: 13, color: "#667085" }}>
+                Every onboarding call, its sentiment, and the next action.
+              </p>
+            </div>
+            <DashboardActions />
+          </div>
+
+          {/* ── DB error banner ── */}
+          {error && (
+            <div style={{ marginBottom: 20, borderRadius: 8, border: "1px solid #FEECEB", background: "#FEECEB", padding: "12px 16px", fontSize: 13, color: "#B42318" }}>
+              <strong>Database error:</strong> {error}
+              <br />
+              <span style={{ opacity: 0.8 }}>
+                Verify <code style={{ background: "rgba(0,0,0,0.06)", padding: "0 4px", borderRadius: 3 }}>SUPABASE_SERVICE_ROLE_KEY</code> is the key for project{" "}
+                <code style={{ background: "rgba(0,0,0,0.06)", padding: "0 4px", borderRadius: 3 }}>xovsiklkiqxmpmvioscc</code>.
+              </span>
+            </div>
+          )}
+
+          {/* ── Stat tiles ── */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
+            <StatCard label="Calls placed" value={stats.totalCalls.toLocaleString()} />
+            <StatCard label="Completed" value={stats.completed.toLocaleString()} />
+            <StatCard label="Activation rate" value={`${activationRate}%`} />
+            <StatCard label="Follow-ups needed" value={stats.followUps.toLocaleString()} />
+          </div>
+
+          {/* ── Calls table ── */}
+          <div style={{ background: "#FFFFFF", border: "1px solid #E7E9EE", borderRadius: 10, overflow: "hidden", boxShadow: "0 1px 2px rgba(17,17,17,.04)" }}>
+            {/* Table header */}
+            <div style={{ display: "grid", gridTemplateColumns: "1.4fr 0.7fr 1fr 1fr 1fr 1.2fr", gap: 12, padding: "10px 16px", background: "#F7F8FA", fontSize: 12, color: "#667085", fontWeight: 500, borderBottom: "1px solid #E7E9EE" }}>
+              <div>Customer</div>
+              <div>Status</div>
+              <div>Sentiment</div>
+              <div>Activation</div>
+              <div>Follow-up</div>
+              <div>Summary</div>
+            </div>
+
+            {calls.length === 0 && !error && (
+              <div style={{ padding: "40px 16px", textAlign: "center", color: "#667085", fontSize: 14 }}>
+                <div style={{ marginBottom: 8 }}>No calls placed yet.</div>
+                <div style={{ fontSize: 13, color: "#A2A9B5" }}>Click <strong style={{ color: "#FF5A1F" }}>Call a customer</strong> to start an onboarding call.</div>
+              </div>
+            )}
+
+            {calls.map((c, i) => {
+              const insight = c.insights?.[0] ?? null;
+              const isLast = i === calls.length - 1;
+              return (
+                <div
+                  key={c.id}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1.4fr 0.7fr 1fr 1fr 1fr 1.2fr",
+                    gap: 12,
+                    padding: "12px 16px",
+                    borderTop: "1px solid #EFF1F4",
+                    fontSize: 13,
+                    alignItems: "center",
+                    borderBottom: isLast ? "none" : undefined,
+                    transition: "background 80ms ease",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#FAFAFA")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <div>
+                    <div style={{ fontWeight: 500 }}>
+                      {c.customers?.name ?? c.customers?.phone ?? "Unknown"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#A2A9B5", marginTop: 1 }}>
+                      {c.customers?.business_name ?? relativeTime(c.created_at)}
+                    </div>
+                  </div>
+                  <div><StatusBadge value={c.status} /></div>
+                  <div><SentimentBadge value={insight?.sentiment ?? null} /></div>
+                  <div><ActivationBadge value={insight?.activation_status ?? null} /></div>
+                  <div><FollowUpBadge needed={insight?.follow_up_required ?? null} /></div>
+                  <div style={{ color: "#667085", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.summary ?? insight?.goal ?? ""}>
+                    {c.summary ?? insight?.goal ?? <span style={{ color: "#C9CED8" }}>—</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      )}
-    </main>
+      </main>
+    </div>
   );
 }
