@@ -58,6 +58,25 @@ export function ActivationBadge({ value }: { value: string | null }) {
   return <Pill {...t} />;
 }
 
+/**
+ * What actually happened on the call, as opposed to the raw CALL-E lifecycle
+ * status. A call can be "completed" and still never have reached a human — that
+ * must not read as success.
+ */
+export function OutcomeBadge({ status, hasInsight }: { status: string | null; hasInsight: boolean }) {
+  if (!status) return <span style={{ color: "#C9CED8" }}>—</span>;
+  if (status === "queued") return <Pill bg="#EEF1FF" color="#3538CD" label="Queued" />;
+  if (status === "in_progress") return <Pill bg="#EEF1FF" color="#3538CD" label="In progress" />;
+  if (status === "failed") return <Pill bg="#FEECEB" color="#B42318" label="Failed" />;
+  if (status === "canceled") return <Pill bg="#F0F1F4" color="#475467" label="Cancelled" />;
+  if (status === "completed") {
+    return hasInsight
+      ? <Pill bg="#E7F8EE" color="#15803D" label="Onboarded" />
+      : <Pill bg="#FFF1EB" color="#C2410C" label="Not reached" />;
+  }
+  return <Pill bg="#F0F1F4" color="#475467" label={status} />;
+}
+
 export function FollowUpBadge({ needed }: { needed: boolean | null }) {
   if (!needed) return <span style={{ color: "#C9CED8" }}>—</span>;
   return <Pill bg="#EEF1FF" color="#3538CD" label="Needed" />;

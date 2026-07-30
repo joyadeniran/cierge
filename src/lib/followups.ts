@@ -9,6 +9,44 @@ import type { OnboardingInsight } from "./flows/onboarding";
  * in a later step. Recording first keeps the dashboard honest and the pipe
  * observable end-to-end.
  */
+/**
+ * The call reached a terminal state without a usable conversation — the customer
+ * was never actually reached (no answer, carrier rejection, voicemail, failure).
+ * Queue a retry task so the signup isn't silently dropped.
+ */
+export async function recordUnreachedFollowUp(args: {
+  customerId: string;
+  callId: string;
+  status: string;
+  failureCode?: string | null;
+  summary?: string | null;
+}): Promise<void> {
+  const sb = supabaseAdmin();
+
+  // Idempotency: webhook delivery is at-least-once, so don't stack duplicates.
+  const { data: existing } = await sb
+    .from("follow_ups")
+    .select("id")
+    .eq("call_id", args.callId)
+    .eq("channel", "task")
+    .maybeSingle();
+  if (existing) return;
+
+  const reason =
+    args.status === "failed"
+      ? `Call failed${args.failureCode ? ` (${args.failureCode})` : ""} — retry`
+      : "Call did not reach the customer — retry";
+
+  await sb.from("follow_ups").insert({
+    customer_id: args.customerId,
+    call_id: args.callId,
+    channel: "task",
+    reason,
+    status: "pending",
+    payload: { unreached: true, call_status: args.status, failure_code: args.failureCode ?? null, summary: args.summary ?? null },
+  });
+}
+
 export async function maybeFollowUp(args: {
   customerId: string;
   callId: string;

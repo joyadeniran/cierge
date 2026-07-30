@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getCalls } from "@/lib/queries";
 import { StatCard } from "@/components/StatCard";
-import { SentimentBadge, ActivationBadge, FollowUpBadge, StatusBadge } from "@/components/Badge";
+import { SentimentBadge, ActivationBadge, FollowUpBadge, OutcomeBadge } from "@/components/Badge";
 import { DashboardActions } from "@/components/DashboardActions";
 import { PageHeader, Panel, ErrorBanner, EmptyState, relativeTime, Dash } from "@/components/ui";
 
@@ -12,10 +12,12 @@ const COLS = "1.4fr 0.7fr 1fr 1fr 1fr 1.2fr";
 export default async function Overview() {
   const { data: calls, error } = await getCalls(100);
 
-  const completed = calls.filter(c => c.status === "completed").length;
+  // "Reached" = the call actually produced a conversation. A call can be
+  // status=completed and still never have reached a human.
+  const reached = calls.filter(c => c.insights?.length).length;
   const activated = calls.filter(c => c.insights?.[0]?.activation_status === "Activated").length;
   const followUps = calls.filter(c => c.insights?.[0]?.follow_up_required).length;
-  const activationRate = completed > 0 ? Math.round((activated / completed) * 100) : 0;
+  const activationRate = reached > 0 ? Math.round((activated / reached) * 100) : 0;
 
   return (
     <>
@@ -29,7 +31,7 @@ export default async function Overview() {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label="Calls placed" value={calls.length.toLocaleString()} />
-        <StatCard label="Completed" value={completed.toLocaleString()} />
+        <StatCard label="Reached" value={reached.toLocaleString()} />
         <StatCard label="Activation rate" value={`${activationRate}%`} />
         <StatCard label="Follow-ups needed" value={followUps.toLocaleString()} />
       </div>
@@ -55,7 +57,7 @@ export default async function Overview() {
                 <div style={{ fontWeight: 500 }}>{c.customers?.name ?? c.customers?.phone ?? "Unknown"}</div>
                 <div style={{ fontSize: 12, color: "#A2A9B5", marginTop: 1 }}>{c.customers?.business_name ?? relativeTime(c.created_at)}</div>
               </div>
-              <div><StatusBadge value={c.status} /></div>
+              <div><OutcomeBadge status={c.status} hasInsight={Boolean(insight)} /></div>
               <div><SentimentBadge value={insight?.sentiment ?? null} /></div>
               <div><ActivationBadge value={insight?.activation_status ?? null} /></div>
               <div><FollowUpBadge needed={insight?.follow_up_required ?? null} /></div>

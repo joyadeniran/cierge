@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "./supabase";
-import { maybeFollowUp } from "./followups";
+import { maybeFollowUp, recordUnreachedFollowUp } from "./followups";
 import type { OnboardingInsight } from "./flows/onboarding";
 
 /** Minimal structural view of a terminal CALL-E call snapshot. */
@@ -64,10 +64,22 @@ export async function ingestCallSnapshot(snap: CallSnapshot): Promise<void> {
     })
     .eq("id", call.id);
 
-  if (snap.status !== "completed") return;
+  // A call can end "completed" yet never have reached a human — no answer,
+  // voicemail, or a carrier rejection. CALL-E signals that by returning no
+  // structured result. Treat those as unreached and queue a retry rather than
+  // letting the signup look successfully onboarded.
+  const result = snap.status === "completed" ? pickResult(snap) : null;
 
-  const result = pickResult(snap);
-  if (!result) return;
+  if (!result) {
+    await recordUnreachedFollowUp({
+      customerId: call.customer_id,
+      callId: call.id,
+      status: snap.status,
+      failureCode: snap.failure_code ?? null,
+      summary: snap.summary ?? snap.recipients?.[0]?.summary ?? null,
+    });
+    return;
+  }
 
   const { data: insight } = await sb
     .from("insights")

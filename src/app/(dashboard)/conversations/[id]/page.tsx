@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCall } from "@/lib/queries";
-import { SentimentBadge, StatusBadge, ActivationBadge } from "@/components/Badge";
+import { SentimentBadge, OutcomeBadge, ActivationBadge } from "@/components/Badge";
 import { Panel, ErrorBanner, relativeTime, Dash } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -69,8 +69,16 @@ export default async function CallDetail({ params }: { params: Promise<{ id: str
             {call.customers?.phone} · {relativeTime(call.created_at)}
           </p>
         </div>
-        <StatusBadge value={call.status} />
+        <OutcomeBadge status={call.status} hasInsight={Boolean(insight)} />
       </div>
+
+      {call.status === "completed" && !insight && (
+        <div style={{ marginBottom: 20, borderRadius: 8, background: "#FFF1EB", border: "1px solid #FFE3D6", padding: "12px 16px", fontSize: 13, color: "#C2410C" }}>
+          <strong>Customer not reached.</strong> The call ended without a conversation — no answer,
+          voicemail, or the carrier rejected it. No insight was extracted, and a retry task has been
+          queued under <strong>Tasks</strong>.
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 20, alignItems: "start" }}>
         {/* Transcript */}

@@ -27,6 +27,8 @@ vercel deploy --prod --yes --token "$VERCEL_TOKEN"
 |---|---|
 | `SUPABASE_URL` | `https://xovsiklkiqxmpmvioscc.supabase.co` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → `service_role` secret |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://xovsiklkiqxmpmvioscc.supabase.co` (client auth — **build-time inlined, redeploy after adding**) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `sb_publishable_WM1NX05uYcblbsNH8-wlJw_wyUZMNRp` (client auth — safe to expose) |
 | `CALLE_API_KEY` | from `calle auth login` |
 | `CALLE_WEBHOOK_SECRET` | CALL-E dashboard → webhooks (recommended in prod) |
 | `APP_URL` | your Vercel production URL (set after first deploy) |

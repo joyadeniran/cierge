@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getCalls } from "@/lib/queries";
-import { SentimentBadge, StatusBadge } from "@/components/Badge";
+import { SentimentBadge, OutcomeBadge } from "@/components/Badge";
 import { PageHeader, Panel, ErrorBanner, EmptyState, relativeTime, Dash } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +35,7 @@ export default async function Conversations() {
               <div style={{ fontSize: 12, color: "#A2A9B5", marginTop: 1 }}>{c.customers?.business_name ?? c.customers?.phone ?? ""}</div>
             </div>
             <div style={{ color: "#667085", textTransform: "capitalize" }}>{c.type}</div>
-            <div><StatusBadge value={c.status} /></div>
+            <div><OutcomeBadge status={c.status} hasInsight={Boolean(c.insights?.length)} /></div>
             <div><SentimentBadge value={c.insights?.[0]?.sentiment ?? null} /></div>
             <div style={{ color: "#667085" }}>{relativeTime(c.created_at)}</div>
             <div style={{ color: "#667085", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.summary ?? ""}>
