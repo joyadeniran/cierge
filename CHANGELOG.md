@@ -6,6 +6,53 @@ All notable changes to Cierge are documented here.
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-07-30
+
+### First live end-to-end call — pipeline verified
+Placed the first real call (`call_kSCuBDBjUGwhoHK_mSmSMg`) via `POST /api/webhooks/supplya`.
+**The Cierge pipeline works end to end:** CALL-E accepted the call and began the
+onboarding script, the terminal webhook fired, and `ingestCallSnapshot` wrote the call
+row with status, `task_completed`, confidence 0.9, summary, `completed_at`, and 7
+transcript turns. No insight row — correctly, because CALL-E returned
+`structured_result: null` (no conversation took place).
+
+### Fixed
+- **"Not reached" calls no longer look like successes.** A CALL-E call can end
+  `status=completed` yet never reach a human. Previously that rendered as a green
+  "Completed" with no follow-up, so a dropped signup appeared onboarded.
+  - `ingest.ts`: terminal-but-unreached calls now queue a retry task via
+    `recordUnreachedFollowUp()` instead of returning early
+  - `followups.ts`: new `recordUnreachedFollowUp()`, idempotent against
+    at-least-once webhook redelivery
+  - `Badge.tsx`: new `OutcomeBadge` (Onboarded / Not reached / Failed / Queued /
+    In progress) replacing the raw lifecycle `StatusBadge` across overview,
+    conversations, and call detail
+  - Overview stats: "Completed" → **"Reached"** (calls that produced a conversation);
+    activation rate now divides by reached, not completed
+  - Call detail: explicit banner explaining why a call wasn't reached
+  - Backfilled the retry task for the first live call
+
+### Twilio configuration (completed)
+- Verified **Nigeria geo-permissions were already enabled** via *Phone # Permission Check*
+  against +2348033865501 → "Calling is enabled to this number." No change needed.
+- Confirmed account is **pay-as-you-go** (not trial) — no verified-number restriction.
+- Created TwiML Bin `Cierge - forward to Nigeria` (`EH065f4f20eccde28f89b1b66e1343c7d4`)
+  and pointed the number's voice webhook at it.
+
+### Finding: Twilio → +234 is blocked by the Nigerian carrier
+The forward leg returned carrier IVR, not a person: *"All circuits are busy now"* and
+*"The facility to make outgoing calls from this number has been withdrawn."* Consistent
+with Nigerian carriers filtering international VoIP-originated calls with a foreign
+caller ID. **Not fixable from Twilio settings.**
+
+### Fix: conference bridge (now active)
+- Created TwiML Bin `Cierge - conference bridge` (`EH3d4ab4e02f47bc67531d7636a6ba04ae`)
+  and switched the number to it. Both parties dial into conference `cierge-demo`, so the
+  blocked inbound-to-Nigeria leg disappears (outbound *from* Nigeria works fine).
+  `beep="false"` + `waitUrl=""` so no audio is mistaken for customer speech.
+- `docs/telephony-demo.md` rewritten with verified values, the evidence transcript,
+  the ordered demo sequence, and how to switch back.
+
 ## [0.6.0] — 2026-07-28
 
 ### Added — Authentication (Supabase Auth)
