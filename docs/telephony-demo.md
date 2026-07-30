@@ -77,6 +77,30 @@ If nobody is in the conference when CALL-E joins, it talks into silence and the 
 
 Phone Numbers → Active numbers → +1 629 330 9406 → Configure → *A call comes in* → TwiML Bin → **Cierge - forward to Nigeria**. Worth retrying occasionally: "all circuits are busy" is partly congestion, so it may succeed on another day or another Nigerian carrier.
 
+## Troubleshooting
+
+### Call fails instantly with `获取机器人失败` — check the CALL-E balance first
+
+Symptoms: `status: failed`, `failure_code: call_failed`, attempt
+`failure_code: 获取机器人失败` ("failed to fetch bot"), **`started_at: null`**, zero
+transcript turns, `$0.00` billed. The CALL-E event log shows `botlab create bot` → a long
+gap → `resolve robot id` → init failed. API create latency also degrades to ~30s.
+
+**This is not a Twilio or TwiML problem — Twilio is never reached.** The call never dials.
+
+Observed 2026-07-30: the first call succeeded at exactly **$1.00** balance (cost $0.05 for
+29s ⇒ ~$0.10/min). Every call afterwards, at **$0.95** with a *"Low Balance"* flag, failed
+this way. Working theory: **CALL-E requires ≥$1.00 available to provision a call.**
+
+Fix: `dashboard.heycall-e.com` → **Billing** → **Top Up Balance**. Budget ~$0.10/min;
+$5–10 covers testing plus recording the demo video.
+
+### Inbound call answers then goes silent
+
+Expected when you're the only participant in the conference. `beep="false"` is deliberate
+so CALL-E doesn't transcribe beeps as customer speech. Stay on the line until the Cierge
+call joins.
+
 ## Production path (post-hackathon)
 
 Swap the voice provider behind `src/lib/calle.ts` + `src/lib/calls-service.ts` for one that terminates reliably in Nigeria:
