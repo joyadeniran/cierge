@@ -6,6 +6,24 @@ All notable changes to Cierge are documented here.
 
 ## [Unreleased]
 
+### Added
+- `docs/demo-video-script.md` — shot-by-shot 3-minute script for the CALL-E hackathon submission,
+  built around the verified live call. Opens on the real unfilled Supplya CS job posting, centres
+  on an unedited live call, and lands on the spoken-yes → structured field → queued task chain.
+  Includes a pre-flight checklist, retry guidance for carrier congestion, and a note on showing the
+  failure mode honestly.
+
+### Submitted
+- **PR [#48](https://github.com/CALLE-AI/awesome-phone-call-agents/pull/48)** to
+  `CALLE-AI/awesome-phone-call-agents` — new `customer-onboarding-call` Agent Skill generalising
+  this workflow: one signup → one call → one structured result → at most one follow-up task.
+  Ships four references (structured result schema, safety contract, international routing, worked
+  examples) plus README entries. Encodes the hard-won lessons: terminal ≠ reached, carrier audio is
+  transcribed as customer speech, don't diagnose a corridor from a single overnight attempt, and
+  don't invert the product with a conference bridge. Repository validation passes; all examples use
+  reserved fictional 555-01xx numbers with no real numbers, keys, or transcripts.
+
+
 ## [0.8.0] — 2026-07-30
 
 ### ✅ Verified working end to end — real onboarding conversation
