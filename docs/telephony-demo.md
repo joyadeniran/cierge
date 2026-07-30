@@ -7,16 +7,43 @@
 | Twilio number (CALL-E dials this) | **+1 629 330 9406** |
 | Nigerian phone | +234 803 386 5501 |
 | Phone number SID | `PN9ff18db3108ab8c2aafc10cdff45293f` |
-| TwiML Bin — conference bridge (**active**) | `EH3d4ab4e02f47bc67531d7636a6ba04ae` |
-| TwiML Bin — direct forward (kept, not active) | `EH065f4f20eccde28f89b1b66e1343c7d4` |
+| TwiML Bin — direct forward (**active — use this**) | `EH065f4f20eccde28f89b1b66e1343c7d4` |
+| TwiML Bin — conference bridge (kept, not active) | `EH3d4ab4e02f47bc67531d7636a6ba04ae` |
 | Billing | Pay-as-you-go (upgraded — no verified-number restriction) |
 
-## Verified facts (2026-07-30)
+## ✅ It works — verified end to end (2026-07-30 12:35 WAT)
+
+`call_TydrEhLIRaFZzMIDGW5UPw` — a real onboarding conversation over the **direct forward**
+path: CALL-E → +1 629 330 9406 → Twilio `<Dial>` → +234 803 386 5501 → answered.
+1m42s, 15 turns, completion confidence 0.94, and a fully populated structured result
+(business type, goal, pain points, sentiment, activation status, human-contact flag).
+The insight row and follow-up task were written automatically by the webhook/ingest path.
+
+**Use the direct-forward bin.** It is the correct product shape: Cierge calls the customer.
+The conference bridge (below) makes the *customer* dial in, which inverts the product — it
+exists only as a fallback and should not be used for demos.
+
+### The +234 issue is intermittent congestion, not a block
+
+Two calls, same configuration, two minutes apart:
+
+- **12:35:22 — succeeded.** Full conversation.
+- **12:37:12 — failed.** `"All circuits are busy now. Please try again later."`
+
+So Twilio→+234 termination is *unreliable*, not blocked. An earlier conclusion that the
+Nigerian carrier permanently blocks it was over-drawn from a single **01:41 AM** attempt
+that Twilio logged as **"No Answer"** while nobody was awake to pick up.
+
+**Design for retries.** Budget roughly one retry per attempt; CALL-E's own failure summary
+suggests waiting ~45 minutes, though an immediate retry often succeeds. Cierge already
+queues a retry task automatically whenever a call ends without reaching anyone.
+
+## Reference facts (2026-07-30)
 
 - **CALL-E will not dial +234 directly.** Rejected immediately at the API/agent layer.
 - **CALL-E happily dials the US Twilio number.** The region restriction is on the destination, so a US number is the way in.
 - **Twilio geo-permissions already allow Nigeria.** Confirmed with Voice → Geo Permissions → *Phone # Permission Check* against +2348033865501: *"Calling is enabled to this number."* Nigeria low-risk is enabled, $0.23–$0.235/min. **No change was needed here.**
-- **The Twilio → +234 forward leg is blocked by the Nigerian carrier.** This is the real blocker, and it is not a Twilio configuration problem.
+- **The Twilio → +234 forward leg is unreliable but works.** Roughly half of attempts hit carrier congestion; retry.
 
 ### Evidence
 
@@ -34,9 +61,11 @@ user  25s  "The facility to make outgoing calls from this number has been withdr
 
 CALL-E's own summary: *"The call could not reach Joy because the phone network reported a dialing/caller-line restriction."*
 
-This is consistent with Nigerian carriers filtering international VoIP-originated calls presenting a foreign caller ID (anti-SIM-box / IRSF measures). It is not fixable from Twilio settings.
+At the time this looked like a permanent carrier block. It isn't — the same configuration
+succeeded at 12:35 WAT. Read it as congestion plus, in this instance, a 1:41 AM call nobody
+answered. Retry rather than re-architect.
 
-## The fix: conference bridge (currently active)
+## Fallback: conference bridge (not active — avoid for demos)
 
 Instead of Twilio calling *into* Nigeria, **both parties dial into the same conference.** Outbound calls *from* Nigeria to a US number work normally, so the blocked leg disappears entirely.
 

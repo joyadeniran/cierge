@@ -6,6 +6,39 @@ All notable changes to Cierge are documented here.
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-07-30
+
+### ✅ Verified working end to end — real onboarding conversation
+`call_TydrEhLIRaFZzMIDGW5UPw` (12:35 WAT) completed a genuine onboarding call over the
+**direct-forward** path: CALL-E → +1 629 330 9406 → Twilio `<Dial>` → +234 → answered.
+1m42s, 15 transcript turns, completion confidence 0.94. Structured extraction was complete
+and correct from natural speech:
+
+```json
+{ "business_type": "Retail Grocery",
+  "goal": "Get more people to buy from the business, especially online buyers.",
+  "pain_points": ["Wants to increase online orders, not just offline sales."],
+  "sentiment": "Positive", "activation_status": "NeedsHumanFollowUp",
+  "used_similar_before": false, "wants_human_contact": true, "follow_up_required": true }
+```
+
+The webhook/ingest path wrote the call row, transcript, insight row, and follow-up task with
+no intervention. The "Not reached" handling from 0.7.0 correctly classified the adjacent
+failed call and queued its own retry task.
+
+### Corrected
+- **Reverted to the direct-forward TwiML bin** (`EH065f4f20eccde28f89b1b66e1343c7d4`) and
+  made it the documented default. The conference bridge inverted the product — it required
+  the *customer* to dial in, which is the opposite of what Cierge does. Kept only as a
+  fallback.
+- **The +234 problem is intermittent congestion, not a permanent carrier block.** Two calls
+  with identical config, two minutes apart: 12:35 succeeded, 12:37 failed with "All circuits
+  are busy now." The earlier "permanently blocked" conclusion was drawn from a single 01:41 AM
+  attempt that Twilio logged as *"No Answer"* with nobody awake to answer. Correct response is
+  to retry, not to re-architect.
+- `docs/telephony-demo.md` rewritten accordingly.
+
+
 ## [0.7.0] — 2026-07-30
 
 ### First live end-to-end call — pipeline verified
