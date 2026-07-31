@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { upsertCustomer, startOnboardingCall } from "@/lib/calls-service";
+import { upsertCustomer, startOnboardingCall, CallNotStartedError } from "@/lib/calls-service";
 
 /**
  * Supplya calls this when a new retailer signs up.
@@ -40,6 +40,14 @@ export async function POST(req: NextRequest) {
     const call = await startOnboardingCall(customer);
     return NextResponse.json({ ok: true, customerId: customer.id, ...call });
   } catch (err) {
+    if (err instanceof CallNotStartedError) {
+      // 409 for an already-in-flight call so a retrying sender doesn't treat it
+      // as a transient fault and pile on more calls; 502 when the provider
+      // refused, which is upstream rather than a bad request.
+      const status = err.reason === "in_flight" ? 409 : 502;
+      console.warn("supplya webhook: call not started", err.reason, err.message);
+      return NextResponse.json({ error: err.message, reason: err.reason }, { status });
+    }
     console.error("supplya webhook error", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "internal error" },

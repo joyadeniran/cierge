@@ -6,6 +6,39 @@ All notable changes to Cierge are documented here.
 
 ## [Unreleased]
 
+### Fixed — cascade bugs found auditing our own implementation against the skill contract
+- **Orphan `queued` calls (critical).** If `calle.calls.create()` threw — insufficient balance,
+  provider 5xx, network — the `calls` row had already been inserted as `queued`. It would never
+  receive a terminal webhook, so it never resolved, never queued a retry, and the signup was
+  silently lost with no error visible on the dashboard. The "not reached" safety net never fired
+  because ingest was never reached. Now wrapped: a provider throw marks the call `failed` with
+  `provider_create_failed` and queues the retry task itself.
+- **Duplicate customers (5 rows for one phone).** The unique constraint was
+  `(source, external_id)`, and Postgres treats NULL `external_id` as distinct — so the manual
+  "Call a customer" path minted a brand-new customer on every call, fragmenting history and making
+  a "don't re-call someone already onboarded" guard impossible. Identity for a calling workflow is
+  the phone number: migration merges duplicates onto the oldest row, repoints calls/insights/
+  follow-ups, and adds a unique index on `(source, phone)`.
+- **Concurrent duplicate dialing.** New partial unique index allows at most one non-terminal call
+  per customer, so two workers or a redelivered webhook cannot both dial the same person. The
+  insert conflict is handled as a normal outcome (`409`), not a 500.
+- **`upsertCustomer` could blank captured data.** A later call with sparse fields overwrote name,
+  business, or email with nulls. Now patches only the fields actually supplied, and recovers from
+  a lost insert race by re-reading the winner.
+- **Error codes.** Call-start failures return `409` (already in flight) or `502` (provider refused)
+  instead of a blanket `500`, so a retrying sender doesn't treat a conflict as transient and pile on.
+
+### Added
+- **Stale-call reconciliation** (`src/lib/reconcile.ts`, `POST|GET /api/calls/reconcile`). A lost
+  terminal webhook was the remaining way a call could hang forever. Reconciliation asks CALL-E
+  directly about anything stuck past 15 minutes, replays terminal results through the same ingest
+  path, and abandons calls still unresolved after 60 minutes — queuing a retry in both cases.
+  Guarded by the shared secret, fails closed when the secret is unset, and exempted from the
+  middleware session gate so a scheduler can drive it.
+- **Brand favicon** — the `<c>` mark as `src/app/icon.svg`: orange brackets, white `c`, Ink
+  rounded square, wired via the Next.js app icon convention.
+
+
 ### Added
 - `docs/demo-video-script.md` — shot-by-shot 3-minute script for the CALL-E hackathon submission,
   built around the verified live call. Opens on the real unfilled Supplya CS job posting, centres

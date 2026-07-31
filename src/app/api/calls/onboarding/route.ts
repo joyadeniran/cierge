@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { startOnboardingCall, upsertCustomer, type CustomerRow } from "@/lib/calls-service";
+import { startOnboardingCall, upsertCustomer, CallNotStartedError, type CustomerRow } from "@/lib/calls-service";
 
 /**
  * Manual trigger — the dashboard "Call now" button and demos use this.
@@ -47,6 +47,11 @@ export async function POST(req: NextRequest) {
     const call = await startOnboardingCall(customer);
     return NextResponse.json({ ok: true, customerId: customer.id, ...call });
   } catch (err) {
+    if (err instanceof CallNotStartedError) {
+      const status = err.reason === "in_flight" ? 409 : 502;
+      console.warn("onboarding trigger: call not started", err.reason, err.message);
+      return NextResponse.json({ error: err.message, reason: err.reason }, { status });
+    }
     console.error("onboarding trigger error", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "internal error" },

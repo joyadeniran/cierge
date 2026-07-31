@@ -41,7 +41,10 @@ export async function middleware(request: NextRequest) {
     path === "/login" ||
     path.startsWith("/auth") ||
     path.startsWith("/api/webhooks") || // CALL-E + Supplya must reach these unauthenticated
-    path === "/api/health";
+    path === "/api/health" ||
+    // Driven by a scheduler with no browser session. The route enforces the
+    // shared secret itself and fails closed when it is unset.
+    path === "/api/calls/reconcile";
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
