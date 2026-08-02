@@ -10,6 +10,89 @@ import type { OnboardingInsight } from "./flows/onboarding";
  * observable end-to-end.
  */
 /**
+ * The customer explicitly refused. Suppress them so no later call can reach
+ * them, cancel anything pending, and record the words that prove it.
+ *
+ * Only ever called from positive refusal evidence in the transcript — never
+ * from a missing structured result.
+ */
+export async function suppressCustomer(args: {
+  customerId: string;
+  callId: string;
+  evidence: string;
+}): Promise<void> {
+  const sb = supabaseAdmin();
+
+  await sb
+    .from("customers")
+    .update({
+      do_not_call: true,
+      do_not_call_reason: args.evidence.slice(0, 500),
+      do_not_call_at: new Date().toISOString(),
+      status: "churned",
+    })
+    .eq("id", args.customerId);
+
+  // A refusal must not leave a retry sitting in the queue for someone to action.
+  await sb
+    .from("follow_ups")
+    .update({ status: "failed", reason: "Cancelled — customer asked not to be contacted" })
+    .eq("customer_id", args.customerId)
+    .eq("status", "pending");
+
+  const { data: existing } = await sb
+    .from("follow_ups")
+    .select("id")
+    .eq("call_id", args.callId)
+    .eq("kind", "action")
+    .maybeSingle();
+  if (existing) return;
+
+  await sb.from("follow_ups").insert({
+    customer_id: args.customerId,
+    call_id: args.callId,
+    channel: "task",
+    kind: "action",
+    reason: "Customer asked not to be contacted — do not call",
+    status: "sent", // nothing to action; recorded for the audit trail
+    sent_at: new Date().toISOString(),
+    payload: { declined: true, evidence: args.evidence },
+  });
+}
+
+/**
+ * A human took part, or we could not tell, but no usable result came back.
+ * This must NOT be re-dialled automatically — a person reads the transcript
+ * first, because the customer may have refused in words no classifier saw.
+ */
+export async function recordReviewFollowUp(args: {
+  customerId: string;
+  callId: string;
+  reason: string;
+  summary?: string | null;
+}): Promise<void> {
+  const sb = supabaseAdmin();
+
+  const { data: existing } = await sb
+    .from("follow_ups")
+    .select("id")
+    .eq("call_id", args.callId)
+    .eq("kind", "review")
+    .maybeSingle();
+  if (existing) return;
+
+  await sb.from("follow_ups").insert({
+    customer_id: args.customerId,
+    call_id: args.callId,
+    channel: "task",
+    kind: "review",
+    reason: args.reason,
+    status: "pending",
+    payload: { needs_review: true, summary: args.summary ?? null },
+  });
+}
+
+/**
  * The call reached a terminal state without a usable conversation — the customer
  * was never actually reached (no answer, carrier rejection, voicemail, failure).
  * Queue a retry task so the signup isn't silently dropped.
@@ -28,7 +111,7 @@ export async function recordUnreachedFollowUp(args: {
     .from("follow_ups")
     .select("id")
     .eq("call_id", args.callId)
-    .eq("channel", "task")
+    .eq("kind", "retry")
     .maybeSingle();
   if (existing) return;
 
@@ -41,6 +124,7 @@ export async function recordUnreachedFollowUp(args: {
     customer_id: args.customerId,
     call_id: args.callId,
     channel: "task",
+    kind: "retry",
     reason,
     status: "pending",
     payload: { unreached: true, call_status: args.status, failure_code: args.failureCode ?? null, summary: args.summary ?? null },

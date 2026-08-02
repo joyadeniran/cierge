@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "./supabase";
-import { maybeFollowUp, recordUnreachedFollowUp } from "./followups";
+import { maybeFollowUp, recordUnreachedFollowUp, recordReviewFollowUp, suppressCustomer } from "./followups";
+import { assessReachability, normalizeTurns } from "./reachability";
 import type { OnboardingInsight } from "./flows/onboarding";
 
 /** Minimal structural view of a terminal CALL-E call snapshot. */
@@ -64,20 +65,50 @@ export async function ingestCallSnapshot(snap: CallSnapshot): Promise<void> {
     })
     .eq("id", call.id);
 
-  // A call can end "completed" yet never have reached a human — no answer,
-  // voicemail, or a carrier rejection. CALL-E signals that by returning no
-  // structured result. Treat those as unreached and queue a retry rather than
-  // letting the signup look successfully onboarded.
   const result = snap.status === "completed" ? pickResult(snap) : null;
 
-  if (!result) {
-    await recordUnreachedFollowUp({
+  // Reachability is judged from the transcript, never from whether a result
+  // exists. Extraction can fail, and a customer who refuses often hangs up
+  // before the model emits anything — treating that as "not reached" would
+  // queue a retry and put a call back in front of someone who just refused.
+  const { reachability, refusalEvidence } = assessReachability(
+    normalizeTurns(collectTranscript(snap))
+  );
+  const summary = snap.summary ?? snap.recipients?.[0]?.summary ?? null;
+
+  // A refusal outranks everything, including a missing result.
+  if (refusalEvidence) {
+    await suppressCustomer({
       customerId: call.customer_id,
       callId: call.id,
-      status: snap.status,
-      failureCode: snap.failure_code ?? null,
-      summary: snap.summary ?? snap.recipients?.[0]?.summary ?? null,
+      evidence: refusalEvidence,
     });
+    return;
+  }
+
+  if (!result) {
+    if (reachability === "no-human") {
+      // Positive evidence nobody took part: safe to retry.
+      await recordUnreachedFollowUp({
+        customerId: call.customer_id,
+        callId: call.id,
+        status: snap.status,
+        failureCode: snap.failure_code ?? null,
+        summary,
+      });
+    } else {
+      // A human took part, or we cannot tell. Either way this must not be
+      // re-dialled on our say-so — a person reads the transcript first.
+      await recordReviewFollowUp({
+        customerId: call.customer_id,
+        callId: call.id,
+        reason:
+          reachability === "human"
+            ? "Call reached the customer but produced no usable result — review before any re-contact"
+            : "Could not determine whether anyone was reached — review before any re-contact",
+        summary,
+      });
+    }
     return;
   }
 

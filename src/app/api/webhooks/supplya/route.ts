@@ -44,7 +44,8 @@ export async function POST(req: NextRequest) {
       // 409 for an already-in-flight call so a retrying sender doesn't treat it
       // as a transient fault and pile on more calls; 502 when the provider
       // refused, which is upstream rather than a bad request.
-      const status = err.reason === "in_flight" ? 409 : 502;
+      const status =
+        err.reason === "suppressed" ? 403 : err.reason === "in_flight" ? 409 : 502;
       console.warn("supplya webhook: call not started", err.reason, err.message);
       return NextResponse.json({ error: err.message, reason: err.reason }, { status });
     }

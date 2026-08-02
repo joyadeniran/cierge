@@ -48,7 +48,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, customerId: customer.id, ...call });
   } catch (err) {
     if (err instanceof CallNotStartedError) {
-      const status = err.reason === "in_flight" ? 409 : 502;
+      const status =
+        err.reason === "suppressed" ? 403 : err.reason === "in_flight" ? 409 : 502;
       console.warn("onboarding trigger: call not started", err.reason, err.message);
       return NextResponse.json({ error: err.message, reason: err.reason }, { status });
     }

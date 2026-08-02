@@ -6,6 +6,36 @@ All notable changes to Cierge are documented here.
 
 ## [Unreleased]
 
+### Fixed — the same reachability bug the upstream reviewer found in the skill (round 3)
+`ingest.ts` treated **any missing structured result as proof nobody was reached** and queued a
+retry task. But a real conversation can return no result — extraction fails, validation rejects it,
+or the customer refuses and hangs up before the model emits anything. So a customer who said
+*"take me off your list"* would be shown as **Not reached** with a task telling a human to
+**call them back**. Automatic dialling was never involved, which capped the severity, but the
+harm shape is identical.
+
+- **`src/lib/reachability.ts`** — reachability is now judged from the transcript, independently of
+  the result: `human` (customer speech that is not carrier audio), `no-human` (voicemail, carrier
+  message, ring-out, silence), or `indeterminate` (no transcript to judge).
+- **Refusal evidence outranks everything.** A refusal in the transcript suppresses the customer
+  (`do_not_call`), cancels every pending follow-up for them, and records the words that prove it —
+  with or without a structured result.
+- **Missing result no longer implies retry.** `no-human` still queues a retry; `human` or
+  `indeterminate` queues a **review** task instead, which explicitly must not be dialled until a
+  person reads the transcript.
+- **Suppression is enforced at the source.** `startOnboardingCall` refuses a suppressed customer
+  (`403`), so no future trigger can route around a refusal.
+- Refusal patterns are deliberately narrow — a false positive silences a real customer.
+
+### Added
+- `customers.do_not_call` / `do_not_call_reason` / `do_not_call_at`, and `follow_ups.kind`
+  (`action` | `retry` | `review`), with existing rows backfilled.
+- **Regression tests** (`npm test`) covering both real call transcripts plus voicemail, ring-out,
+  refusal-without-result, mixed carrier-then-human, and empty transcript. 8 passing.
+- UI: a **Do not call** pill on Customers, and a **Type** column on Tasks distinguishing
+  *Safe to retry* from *Read first*.
+
+
 ### Fixed — cascade bugs found auditing our own implementation against the skill contract
 - **Orphan `queued` calls (critical).** If `calle.calls.create()` threw — insufficient balance,
   provider 5xx, network — the `calls` row had already been inserted as `queued`. It would never

@@ -102,6 +102,8 @@ export async function getCall(id: string): Promise<Result<CallDetail | null>> {
 
 export type CustomerRow = {
   id: string;
+  do_not_call?: boolean | null;
+  do_not_call_reason?: string | null;
   name: string | null;
   business_name: string | null;
   phone: string;
@@ -118,7 +120,7 @@ export async function getCustomers(limit = 100): Promise<Result<CustomerRow[]>> 
     const { data, error } = await supabaseAdmin()
       .from("customers")
       .select(
-        "id,name,business_name,phone,email,status,health_score,created_at," +
+        "id,name,business_name,phone,email,status,health_score,created_at,do_not_call,do_not_call_reason," +
         "calls(id,status,created_at)," +
         "insights(sentiment,activation_status)"
       )
@@ -134,6 +136,7 @@ export async function getCustomers(limit = 100): Promise<Result<CustomerRow[]>> 
 export type FollowUpRow = {
   id: string;
   channel: string;
+  kind?: string | null;
   reason: string | null;
   status: string;
   payload: Record<string, unknown> | null;
@@ -146,7 +149,7 @@ export async function getFollowUps(limit = 100): Promise<Result<FollowUpRow[]>> 
   try {
     const { data, error } = await supabaseAdmin()
       .from("follow_ups")
-      .select("id,channel,reason,status,payload,created_at,sent_at,customers(id,name,business_name,phone)")
+      .select("id,channel,kind,reason,status,payload,created_at,sent_at,customers(id,name,business_name,phone)")
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) return { data: [], error: error.message };

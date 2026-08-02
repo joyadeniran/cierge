@@ -20,6 +20,18 @@ function StatusPill({ status }: { status: string }) {
   return <span style={{ fontSize: 11, fontWeight: 500, background: s.bg, color: s.color, borderRadius: 9999, padding: "3px 9px" }}>{s.label}</span>;
 }
 
+/** A recorded refusal has to be visible, or someone will call them anyway. */
+function DoNotCallPill({ reason }: { reason?: string | null }) {
+  return (
+    <span
+      title={reason ? `Customer said: "${reason}"` : "Customer asked not to be contacted"}
+      style={{ fontSize: 11, fontWeight: 600, background: "#FEECEB", color: "#B42318", borderRadius: 9999, padding: "3px 9px", whiteSpace: "nowrap" }}
+    >
+      Do not call
+    </span>
+  );
+}
+
 export default async function Customers() {
   const { data: customers, error } = await getCustomers(200);
 
@@ -46,7 +58,7 @@ export default async function Customers() {
                 <div style={{ fontSize: 12, color: "#A2A9B5", marginTop: 1 }}>{c.business_name ?? <Dash />}</div>
               </div>
               <div style={{ color: "#667085", fontFamily: "var(--font-mono), monospace", fontSize: 12 }}>{c.phone}</div>
-              <div><StatusPill status={c.status} /></div>
+              <div>{c.do_not_call ? <DoNotCallPill reason={c.do_not_call_reason} /> : <StatusPill status={c.status} />}</div>
               <div style={{ color: "#667085" }}>{c.calls?.length ?? 0}</div>
               <div><SentimentBadge value={latestSentiment} /></div>
               <div style={{ color: "#667085" }}>{relativeTime(c.created_at)}</div>

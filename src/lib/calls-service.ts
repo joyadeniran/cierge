@@ -112,7 +112,7 @@ export async function upsertCustomer(input: {
  */
 /** Raised when a call cannot be started for a reason the caller should see. */
 export class CallNotStartedError extends Error {
-  constructor(message: string, readonly reason: "in_flight" | "provider") {
+  constructor(message: string, readonly reason: "in_flight" | "provider" | "suppressed") {
     super(message);
     this.name = "CallNotStartedError";
   }
@@ -120,6 +120,21 @@ export class CallNotStartedError extends Error {
 
 export async function startOnboardingCall(customer: CustomerRow) {
   const sb = supabaseAdmin();
+
+  // A recorded refusal is terminal. Check it here rather than at the call sites
+  // so no future trigger can route around it.
+  const { data: suppression } = await sb
+    .from("customers")
+    .select("do_not_call,do_not_call_reason")
+    .eq("id", customer.id)
+    .maybeSingle();
+
+  if (suppression?.do_not_call) {
+    throw new CallNotStartedError(
+      "This customer asked not to be contacted.",
+      "suppressed"
+    );
+  }
 
   // A partial unique index enforces one non-terminal call per customer, so this
   // insert is the concurrency guard — two workers cannot both dial the same
