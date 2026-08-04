@@ -14,6 +14,13 @@ const COMPANY_BLURB =
   process.env.COMPANY_BLURB ??
   "a B2B procurement platform that helps retailers, restaurants, offices and small businesses in Nigeria buy inventory more easily, with flexible payment options";
 
+/**
+ * Bump whenever the script or the result schema changes in a way that alters
+ * what the customer hears or what we extract. It is part of the attempt key, so
+ * a revised call can never inherit a previous attempt's provider identity.
+ */
+export const ONBOARDING_SCHEMA_VERSION = "v1";
+
 /** Natural-language goal handed to CALL-E for the call. */
 export function onboardingTask(c: OnboardingCustomer): string {
   const who = c.name ? c.name : "the new customer";

@@ -1,6 +1,7 @@
 import { calle } from "./calle";
 import { supabaseAdmin } from "./supabase";
 import { recordUnreachedFollowUp } from "./followups";
+import { buildAttemptKey } from "./attempt-key";
 import {
   onboardingTask,
   onboardingResultSchema,
@@ -16,9 +17,6 @@ export interface CustomerRow {
   locale: string | null;
 }
 
-/**
- * Upsert a customer (keyed on source + external_id) and return the row.
- */
 const CUSTOMER_COLS = "id,name,business_name,phone,region,locale";
 
 /**
@@ -106,10 +104,6 @@ export async function upsertCustomer(input: {
   return data as CustomerRow;
 }
 
-/**
- * Create a `calls` row and place the CALL-E outbound onboarding call.
- * CALL-E delivers the terminal result to APP_URL/api/webhooks/calle.
- */
 /** Raised when a call cannot be started for a reason the caller should see. */
 export class CallNotStartedError extends Error {
   constructor(message: string, readonly reason: "in_flight" | "provider" | "suppressed") {
@@ -118,6 +112,10 @@ export class CallNotStartedError extends Error {
   }
 }
 
+/**
+ * Create a `calls` row and place the CALL-E outbound onboarding call.
+ * CALL-E delivers the terminal result to APP_URL/api/webhooks/calle.
+ */
 export async function startOnboardingCall(customer: CustomerRow) {
   const sb = supabaseAdmin();
 
@@ -157,24 +155,39 @@ export async function startOnboardingCall(customer: CustomerRow) {
 
   const appUrl = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 
+  const task = onboardingTask({
+    name: customer.name,
+    businessName: customer.business_name,
+  });
+  const locale = customer.locale ?? "en-NG";
+  const region = customer.region ?? "NG";
+
+  // Bind the idempotency key to what is actually being dialled, not just to the
+  // call row. A row id alone identifies a slot; if the destination number were
+  // corrected or the script revised, the same key would cover a materially
+  // different call and reconciliation could match the wrong provider record.
+  const attemptKey = buildAttemptKey({
+    callId: call.id,
+    phone: customer.phone,
+    task,
+    locale,
+  });
+
   let created;
   try {
     created = await calle().calls.create(
       {
-        task: onboardingTask({
-          name: customer.name,
-          businessName: customer.business_name,
-        }),
-        recipient: {
-          phones: [customer.phone],
-          locale: customer.locale ?? "en-NG",
-          region: customer.region ?? "NG",
-        },
+        task,
+        recipient: { phones: [customer.phone], locale, region },
         resultSchema: onboardingResultSchema as unknown as Record<string, unknown>,
-        metadata: { cierge_call_id: call.id, customer_id: customer.id },
+        metadata: {
+          cierge_call_id: call.id,
+          customer_id: customer.id,
+          attempt_key: attemptKey,
+        },
         webhookUrl: `${appUrl}/api/webhooks/calle`,
       },
-      { idempotencyKey: call.id }
+      { idempotencyKey: attemptKey }
     );
   } catch (err) {
     // The call row already exists. If we leave it queued it will never receive a

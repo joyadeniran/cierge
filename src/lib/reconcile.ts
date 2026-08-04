@@ -1,7 +1,7 @@
 import { calle, calleConfigured } from "./calle";
 import { supabaseAdmin } from "./supabase";
 import { ingestCallSnapshot, type CallSnapshot } from "./ingest";
-import { recordUnreachedFollowUp } from "./followups";
+import { recordUnreachedFollowUp, recordReviewFollowUp } from "./followups";
 
 /**
  * A call is only ever closed by CALL-E's terminal webhook. If that webhook is
@@ -50,10 +50,13 @@ export async function reconcileStaleCalls(limit = 25): Promise<ReconcileResult> 
     const ageMinutes = (Date.now() - new Date(row.created_at).getTime()) / 60_000;
 
     try {
-      // No provider id means create() never returned — nothing to ask about.
+      // No provider id means create() never returned us one. That does NOT prove
+      // the provider never placed the call — it may have created it and failed
+      // to respond. Unknown, so a human decides; never an automatic redial.
       if (!row.calle_call_id) {
         await abandon(row.id, row.customer_id, "no_provider_id",
-          "Call was never registered with the voice provider.");
+          "Call was never registered with the voice provider, so its outcome is unknown.",
+          "review");
         out.abandoned++;
         continue;
       }
@@ -74,8 +77,11 @@ export async function reconcileStaleCalls(limit = 25): Promise<ReconcileResult> 
       }
 
       if (ageMinutes >= ABANDON_AFTER_MINUTES) {
+        // The provider still says the call is live. It may well have connected
+        // and been refused — that is unknown, not evidence nobody answered.
         await abandon(row.id, row.customer_id, "abandoned_stale",
-          `Provider still reported "${snap.status}" after ${Math.round(ageMinutes)} minutes.`);
+          `Provider still reported "${snap.status}" after ${Math.round(ageMinutes)} minutes; outcome unknown.`,
+          "review");
         out.abandoned++;
         continue;
       }
@@ -85,8 +91,10 @@ export async function reconcileStaleCalls(limit = 25): Promise<ReconcileResult> 
       const message = e instanceof Error ? e.message : "unknown error";
       // A provider lookup failure must not stall the rest of the batch.
       if (ageMinutes >= ABANDON_AFTER_MINUTES) {
+        // An unreachable provider tells us nothing about the customer.
         await abandon(row.id, row.customer_id, "abandoned_unreachable",
-          `Could not reconcile with the provider: ${message}`).catch(() => {});
+          `Could not reconcile with the provider: ${message}. Outcome unknown.`,
+          "review").catch(() => {});
         out.abandoned++;
       } else {
         out.errors.push({ callId: row.id, error: message });
@@ -97,11 +105,21 @@ export async function reconcileStaleCalls(limit = 25): Promise<ReconcileResult> 
   return out;
 }
 
+/**
+ * Close out an attempt we can no longer resolve.
+ *
+ * `disposition` decides whether the signup may be dialled again. Only pass
+ * `"retry"` when there is positive evidence no call reached anyone. Provider
+ * unreachable, provider unsure, or no provider record at all are all *unknown* —
+ * they release the attempt slot but must never authorise a redial, because the
+ * call may have connected and been refused.
+ */
 async function abandon(
   callId: string,
   customerId: string,
   failureCode: string,
-  summary: string
+  summary: string,
+  disposition: "retry" | "review"
 ): Promise<void> {
   const sb = supabaseAdmin();
   await sb
@@ -115,13 +133,17 @@ async function abandon(
     .eq("id", callId)
     .in("status", ["queued", "in_progress"]); // don't clobber a late webhook
 
-  await recordUnreachedFollowUp({
-    customerId,
-    callId,
-    status: "failed",
-    failureCode,
-    summary,
-  }).catch(() => {
+  const queue =
+    disposition === "retry"
+      ? recordUnreachedFollowUp({ customerId, callId, status: "failed", failureCode, summary })
+      : recordReviewFollowUp({
+          customerId,
+          callId,
+          reason: `Attempt could not be reconciled (${failureCode}) — read the record before any re-contact`,
+          summary,
+        });
+
+  await queue.catch(() => {
     // Bookkeeping must not fail the reconciliation pass.
   });
 }

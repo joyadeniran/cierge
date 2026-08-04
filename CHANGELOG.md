@@ -6,6 +6,29 @@ All notable changes to Cierge are documented here.
 
 ## [Unreleased]
 
+### Fixed — unknown outcomes could still authorise a redial (review round 4)
+Reconciliation treated *"we could not find out"* as *"nobody answered"*. `abandon()` queued a
+**retry** task whenever the provider was unreachable, still reported the call live, or had no
+record of it. None of those is evidence about the customer — the call may well have connected and
+been refused — so a redial could reach someone who had already said no.
+
+- `reconcile.ts` now takes an explicit disposition. All three unknown paths
+  (`no_provider_id`, `abandoned_stale`, `abandoned_unreachable`) queue a **review** task instead of
+  a retry. Releasing the stuck attempt slot and authorising another call are now separate decisions.
+- Only positive evidence that no call reached anyone may queue a retry.
+
+### Added
+- **Payload-bound attempt keys** (`src/lib/attempt-key.ts`). The provider idempotency key was the
+  call row id, which identifies a *slot* rather than a call. It is now
+  `onboarding:<callId>:<digest>`, where the digest covers destination, locale, script text, and
+  schema version — so a corrected number or a revised script cannot inherit a previous attempt's
+  identity, and a reconciliation lookup can verify a provider record belongs to that attempt.
+  `ONBOARDING_SCHEMA_VERSION` gates the script/schema half of the digest.
+- Attempt key is also carried in call metadata for reconciliation.
+- Tests extended to 14: 8 reachability, 6 attempt-key (identity, destination change, script change,
+  locale change, distinct call row, determinism).
+
+
 ### Fixed — the same reachability bug the upstream reviewer found in the skill (round 3)
 `ingest.ts` treated **any missing structured result as proof nobody was reached** and queued a
 retry task. But a real conversation can return no result — extraction fails, validation rejects it,

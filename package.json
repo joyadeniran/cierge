@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx tests/reachability.test.ts"
+    "test": "tsx tests/reachability.test.ts && tsx tests/attempt-key.test.ts"
   },
   "dependencies": {
     "@call-e/calle": "^0.2.2",
