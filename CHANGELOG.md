@@ -24,6 +24,12 @@ failure is stated not to be no-human evidence at all, and a matching billing cha
 `README.md` conflict resolved (upstream's voice-preflight entry and both onboarding entries all
 kept). Repository validation passes.
 
+**Merged.** PR #48 was merged upstream on 2026-08-12 by `Ray-56` (merge commit `bbb1159`), with
+this round's `206495d` and the upstream-merge `3c66be4` as its final two commits. Verified against
+upstream `main` rather than PR metadata: `international-routing.md` carries the corrected
+observed-evidence rule and the closed-evidence gate, and `README.md` retains all three Safety
+patterns entries alongside the skills-list entry. No conflicts outstanding.
+
 ### Fixed — unknown outcomes could still authorise a redial (review round 4)
 Reconciliation treated *"we could not find out"* as *"nobody answered"*. `abandon()` queued a
 **retry** task whenever the provider was unreachable, still reported the call live, or had no
