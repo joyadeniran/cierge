@@ -6,6 +6,30 @@ All notable changes to Cierge are documented here.
 
 ## [Unreleased]
 
+### Fixed — routing reference contradicted the closed-evidence rule (PR #48, review round 5)
+Upstream review on [PR #48](https://github.com/CALLE-AI/awesome-phone-call-agents/pull/48) found
+that `references/international-routing.md` still told the reader to *"rely on the presence of a
+structured result … to decide a human was reached"* — the exact inversion `SKILL.md` had just
+corrected. A structured result is a model artefact, not an observation of the call: the extractor
+emits fields from carrier recordings, and a genuine conversation can produce no result at all. Left
+as written, the reference authorised an automatic redial of someone who was reached or who refused.
+
+The reference now derives reachability from observed call evidence only — a provider
+human-answered signal, or customer speech that is not carrier or IVR audio — and every retry path
+in the document is gated on the same closed no-human evidence set. Carrier audio is named as
+no-human evidence in its own right; customer speech in the same transcript beats it and routes to
+Stage B rather than a redial; turn count is evidence in neither direction. A provider-reported
+failure is stated not to be no-human evidence at all, and a matching billing charge is evidence
+*against* a redial, since it proves the call was placed. Upstream `main` was merged in and the
+`README.md` conflict resolved (upstream's voice-preflight entry and both onboarding entries all
+kept). Repository validation passes.
+
+**Merged.** PR #48 was merged upstream on 2026-08-12 by `Ray-56` (merge commit `bbb1159`), with
+this round's `206495d` and the upstream-merge `3c66be4` as its final two commits. Verified against
+upstream `main` rather than PR metadata: `international-routing.md` carries the corrected
+observed-evidence rule and the closed-evidence gate, and `README.md` retains all three Safety
+patterns entries alongside the skills-list entry. No conflicts outstanding.
+
 ### Fixed — unknown outcomes could still authorise a redial (review round 4)
 Reconciliation treated *"we could not find out"* as *"nobody answered"*. `abandon()` queued a
 **retry** task whenever the provider was unreachable, still reported the call live, or had no
