@@ -23,6 +23,18 @@ became a telephony outage.
   `/login` — instead of a gateway timeout on every page.
 - Rebuilt the database on a new Supabase project (`jcqbdtuqmiyysfzxdtvf`, eu-central-1).
 
+### Fixed — `/api/health` reported a project mismatch on a healthy deploy
+The project-ref check decoded the service-role key as a JWT and compared the ref to the
+one in `SUPABASE_URL`. Modern `sb_secret_…` keys are opaque and carry no ref, so the
+decode always failed and `match` always read `false` — on a deploy where everything was
+correct. A diagnostic that cries wolf is worse than no diagnostic: it reads as a
+misconfiguration and trains you to ignore the field.
+
+- `match` is now `true | false | null`, where null means "not determinable from an opaque
+  key" — distinct from a genuine mismatch.
+- `project.keyFormat` (`jwt` | `opaque` | `missing`) says which kind of key is in play.
+- With an opaque key, a wrong-project key surfaces as `db.ok: false` instead.
+
 ### Fixed — `supabase/schema.sql` no longer lies about the database
 The file had drifted far enough to be dangerous: a fresh run produced a database that
 silently violated two load-bearing invariants and broke suppression outright. It declared
