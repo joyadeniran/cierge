@@ -6,6 +6,50 @@ All notable changes to Cierge are documented here.
 
 ## [Unreleased]
 
+### Fixed — the site returned 504 on every route, webhooks included
+The Supabase project Cierge pointed at (`xovsiklkiqxmpmvioscc`) no longer exists — its
+hostname does not resolve. `middleware.ts` awaited `supabase.auth.getUser()` *before*
+deciding whether a path was public, so every request paid an auth round-trip to a dead
+host and hung until Vercel killed the invocation (`MIDDLEWARE_INVOCATION_TIMEOUT`). That
+took down `/api/webhooks/calle` and `/api/webhooks/supplya` with it: a database outage
+became a telephony outage.
+
+- **Machine-to-machine routes return before any auth work.** `/api/webhooks/*`,
+  `/api/health`, and `/api/calls/reconcile` authenticate themselves with shared secrets
+  and signatures and have no browser session to refresh. They no longer touch Supabase in
+  the request path, so the auth backend can never take them down.
+- **The session lookup is bounded** (`AUTH_TIMEOUT_MS = 2500`). A hung or failing
+  `getUser()` resolves to "signed out" — costing a signed-in visitor a trip through
+  `/login` — instead of a gateway timeout on every page.
+- Rebuilt the database on a new Supabase project (`jcqbdtuqmiyysfzxdtvf`, eu-central-1).
+
+### Fixed — `/api/health` reported a project mismatch on a healthy deploy
+The project-ref check decoded the service-role key as a JWT and compared the ref to the
+one in `SUPABASE_URL`. Modern `sb_secret_…` keys are opaque and carry no ref, so the
+decode always failed and `match` always read `false` — on a deploy where everything was
+correct. A diagnostic that cries wolf is worse than no diagnostic: it reads as a
+misconfiguration and trains you to ignore the field.
+
+- `match` is now `true | false | null`, where null means "not determinable from an opaque
+  key" — distinct from a genuine mismatch.
+- `project.keyFormat` (`jwt` | `opaque` | `missing`) says which kind of key is in play.
+- With an opaque key, a wrong-project key surfaces as `db.ok: false` instead.
+
+### Fixed — `supabase/schema.sql` no longer lies about the database
+The file had drifted far enough to be dangerous: a fresh run produced a database that
+silently violated two load-bearing invariants and broke suppression outright. It declared
+`unique (source, external_id)` (the duplicate-customer bug, fixed in the live DB but never
+written back), and omitted `customers.do_not_call` / `do_not_call_reason` /
+`do_not_call_at`, `follow_ups.kind`, the `(source, phone)` unique index, and the partial
+unique index enforcing one non-terminal call per customer. Rewritten to match the database
+it now created, with the reasoning for each guarantee recorded inline.
+
+### Security
+- **Row-level security enabled on all four tables**, with no policies. Every read and
+  write goes through the service-role key, which bypasses RLS; the publishable key is used
+  only for auth and never for `.from()` access. Previously the public key could read the
+  entire `customers` table — names, phone numbers, refusal reasons — through PostgREST.
+
 ### Fixed — unknown outcomes could still authorise a redial (review round 4)
 Reconciliation treated *"we could not find out"* as *"nobody answered"*. `abandon()` queued a
 **retry** task whenever the provider was unreachable, still reported the call live, or had no
